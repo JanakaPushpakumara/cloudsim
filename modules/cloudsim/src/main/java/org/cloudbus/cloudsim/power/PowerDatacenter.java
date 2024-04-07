@@ -8,8 +8,15 @@
 
 package org.cloudbus.cloudsim.power;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.FileHandler;
+import java.util.logging.Formatter;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import org.cloudbus.cloudsim.Datacenter;
 import org.cloudbus.cloudsim.DatacenterCharacteristics;
@@ -37,6 +44,11 @@ import org.cloudbus.cloudsim.core.predicates.PredicateType;
  * @since CloudSim Toolkit 2.0
  */
 public class PowerDatacenter extends Datacenter {
+
+	// Create a Logger instance as a class member
+	private static final Logger logger = Logger.getLogger("CPU_Utilization");
+	// Create a FileHandler instance as a class member
+	private static FileHandler fileHandler;
 
 	/** The power. */
 	private double power;
@@ -73,6 +85,35 @@ public class PowerDatacenter extends Datacenter {
 		setDisableMigrations(false);
 		setCloudletSubmitted(-1);
 		setMigrationCount(0);
+
+		// Initialize the separate log FileHandler in the constructor
+		try {
+			// This block configures the logger with handler and formatter
+			fileHandler = new FileHandler("./output/log/"+ vmAllocationPolicy.getClass().getSimpleName() +"-HOST-CPU-utilization.csv", true); // append is set to true
+			//SimpleFormatter formatter = new SimpleFormatter();
+			fileHandler.setFormatter(new Formatter() {
+				@Override
+				public String format(LogRecord record) {
+					return record.getMessage() + "\n";
+				}
+			});
+			// Remove the default console handler
+			Logger rootLogger = Logger.getLogger("");
+			Handler[] handlers = rootLogger.getHandlers();
+			for (Handler handler : handlers) {
+				if (handler instanceof ConsoleHandler) {
+					rootLogger.removeHandler(handler);
+				}
+			}
+
+			// Assign the handler to the logger
+			logger.addHandler(fileHandler);
+
+		} catch (SecurityException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 
 	/**
@@ -175,6 +216,7 @@ public class PowerDatacenter extends Datacenter {
 		Log.printLine("\n\n--------------------------------------------------------------\n\n");
 		Log.formatLine("New resource usage for the time frame starting at %.2f:", currentTime);
 
+		String CPU_list = "";
 		for (PowerHost host : this.<PowerHost> getHostList()) {
 			Log.printLine();
 
@@ -188,7 +230,16 @@ public class PowerDatacenter extends Datacenter {
 					currentTime,
 					host.getId(),
 					host.getUtilizationOfCpu() * 100);
+
+			String formattedCPU = String.format("%.2f", host.getUtilizationOfCpu() * 100);
+			CPU_list += formattedCPU + ", ";
+//			Log.formatLine(
+//					"host CPU %.2f, %d, %.2f",
+//					currentTime,
+//					host.getId(),
+//					host.getUtilizationOfCpu() * 100);
 		}
+		logger.info(currentTime+", " + CPU_list);
 
 		if (timeDiff > 0) {
 			Log.formatLine(
