@@ -10,10 +10,13 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+
 public class PowerVmSelectionPolicyMachineLearning extends PowerVmSelectionPolicy {
 
-    private int historyLength = 10;
+    private final int historyLength = 10;
 
     @Override
     public Vm getVmToMigrate(PowerHost host) {
@@ -23,19 +26,17 @@ public class PowerVmSelectionPolicyMachineLearning extends PowerVmSelectionPolic
         }
         Vm vmToMigrate = null;
         double minMetric = Double.MAX_VALUE;
-        for (Vm vm : migratableVms) {
-            if (vm.isInMigration()) {
-                continue;
-            }
-            List<Double> cpuHistory = ((PowerVm)vm).getUtilizationHistory();
-            List<Double> lastNCpuHistory;
+        for (PowerVm vm : migratableVms) {
+            List<Double> cpuHistory = vm.getUtilizationHistory();
+            List<Double> lastCpuHistory;
 
-            if (cpuHistory.size() > 10) {
-                lastNCpuHistory = cpuHistory.subList(cpuHistory.size() - historyLength, cpuHistory.size());
+            if (cpuHistory.size() > historyLength) {
+                lastCpuHistory = cpuHistory.subList(cpuHistory.size() - historyLength, cpuHistory.size());
             } else {
-                lastNCpuHistory = cpuHistory; // If there are less than N elements, return the whole list
+                lastCpuHistory = cpuHistory; // If there are less than historyLength elements, return the whole list
             }
-            double predictedCpu = callPredictionServer(lastNCpuHistory);
+
+            double predictedCpu = callPredictionServer( vm.getId(), lastCpuHistory );
             if (predictedCpu < minMetric) {
                 minMetric = predictedCpu;
                 vmToMigrate = vm;
@@ -44,15 +45,24 @@ public class PowerVmSelectionPolicyMachineLearning extends PowerVmSelectionPolic
         return vmToMigrate;
     }
 
-    private double callPredictionServer(List<Double> lastCpuHistory) {
+    private double callPredictionServer(int vmId, List<Double> lastCpuHistory) {
         try {
-            URL url = new URL("http://localhost:5000/utilization-prediction"); // replace with your prediction server URL
+
+
+            URL url = new URL("http://localhost:5000/utilization-prediction");
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setDoOutput(true);
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/json");
 
-            String input = new Gson().toJson(lastCpuHistory);
+            Map<String, Object> data = new HashMap<>();
+            data.put("vmid", vmId);
+//          double time = CloudSim.clock(); // get the current simulation time
+//          double cpuUtilization = vm.getTotalUtilizationOfCpuMips(time);
+            double cpuUtilization = lastCpuHistory.get(lastCpuHistory.size() - 1);
+            data.put("cpu", cpuUtilization);
+
+            String input = new Gson().toJson(data);
 
             OutputStream os = conn.getOutputStream();
             os.write(input.getBytes());
